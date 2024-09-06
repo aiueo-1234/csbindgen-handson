@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- if you use Windows, change this RID -->
+    <RuntimeIdentifire>linux-x64</RuntimeIdentifire>
+  </PropertyGroup>
+</Project>
