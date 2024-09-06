@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+
+[lib]
+crate-type = ["cdylib"]
+name = "csbindgenhandson"
+
+[build-dependencies]
+csbindgen = "1.9.3"
+cc = "1.1"
+bindgen = "0.70"
