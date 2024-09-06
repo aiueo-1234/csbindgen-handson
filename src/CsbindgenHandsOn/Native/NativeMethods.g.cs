@@ -19,6 +19,9 @@ namespace CsbindgenHandsOn.Native
         [DllImport(__DllName, EntryPoint = "rust_add", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern int rust_add(int x, int y);
 
+        [DllImport(__DllName, EntryPoint = "rust_pow", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern int rust_pow(int x, int y);
+
 
     }
 
