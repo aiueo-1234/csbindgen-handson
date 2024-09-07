@@ -31,4 +31,30 @@ fn main() {
         .csharp_namespace("CsbindgenHandsOn.Native")
         .generate_csharp_file("../CsbindgenHandsOn/Native/NativeMethods.g.cs")
         .unwrap();
+
+    bindgen::Builder::default()
+        .header("src/c/myStack.h")
+        .generate()
+        .unwrap()
+        .write_to_file("src/myStack.rs")
+        .unwrap();
+
+    cc::Build::new()
+        .file("src/c/myStack.c")
+        .try_compile("myStack")
+        .unwrap();
+
+    csbindgen::Builder::default()
+        .input_bindgen_file("src/myStack.rs")
+        .rust_method_prefix("cffi_")
+        .rust_file_header("use super::myStack::*;")
+        .csharp_entry_point_prefix("cffi_")
+        .csharp_dll_name("csbindgenhandson")
+        .csharp_namespace("CsbindgenHandsOn.Native")
+        .csharp_class_name("CNativeMethodsMyStack")
+        .generate_to_file(
+            "src/myStack_ffi.rs",
+            "../CsbindgenHandsOn/Native/CNativeMethodsMyStack.g.cs",
+        )
+        .unwrap();
 }
