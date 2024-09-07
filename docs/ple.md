@@ -472,7 +472,7 @@ int myMath_add(int a, int b);
 
 ---
 # Cの関数を呼び出してみよう②
-- `libcsbindgenhandson/src/c`ディレクトリをで、`myMath.c`を作成し以下のコードを書き込む
+- `libcsbindgenhandson/src/c`ディレクトリで、`myMath.c`を作成し以下のコードを書き込む
 ```c
 #include "myMath.h"
 
@@ -615,6 +615,211 @@ rust_add(1, 1): 2
 myMath_add(2, 2): 4
 rust_pow(2, 3): 8
 ```
+
+---
+# GroupedNativeMethodsを使ってみよう
+
+---
+# GroupedNativeMethodsを使ってみよう
+- オブジェクト指向的にFFI元関数を呼び出せるようにする機能
+  - FFIの都合上関数のみ呼び出せるので`foge.fuga()`ではなく`NativeMethods.fuga(hoge)`のようになってしまう
+  - ソースコードジェネレータで`foge.fuga()`用の`fuga()`を自動生成可能
+- 今回はC言語でかなり簡素化したスタックを扱って試してみる
+
+---
+# GroupedNativeMethodsを使ってみよう①
+- `libcsbindgenhandson/src/c`ディレクトリで、`myStack.h`を作成し以下のコードを書き込む
+```c
+#ifndef MYSTACK_H_
+#define MYSTACK_H_
+
+typedef struct MyStack
+{
+    int index;
+    int *data;
+} MyStack;
+
+MyStack *myStack_create(int maxLength);
+int myStack_pop(MyStack *myStack);
+void myStack_push(MyStack *myStack, int val);
+void myStack_delete(MyStack *myStack);
+
+#endif
+```
+
+---
+# GroupedNativeMethodsを使ってみよう②-1
+- `libcsbindgenhandson/src/c`ディレクトリで、`myStack.c`を作成し以下のコードを書き込む
+```c
+#include "myStack.h"
+#include <stdlib.h>
+
+MyStack *myStack_create(int maxLength)
+{
+    MyStack *ret = malloc(sizeof(MyStack));
+    if (ret == NULL)
+    {
+        return NULL;
+    }
+    int *data = malloc(sizeof(int) * maxLength);
+    if (data == NULL)
+    {
+        free(ret);
+        return NULL;
+    }
+```
+
+---
+# GroupedNativeMethodsを使ってみよう②-2
+```c
+    ret->index = -1;
+    ret->data = data;
+    return ret;
+}
+
+int myStack_pop(MyStack *myStack){
+    return myStack->data[myStack->index--];
+}
+
+void myStack_push(MyStack *myStack, int val){
+    myStack->data[++myStack->index]=val;
+}
+
+void myStack_delete(MyStack *myStack){
+    free(myStack->data);
+    free(myStack);
+}
+```
+
+---
+# GroupedNativeMethodsを使ってみよう③
+- `build.rs`の`main`関数に下記コードを追記する
+```rust
+bindgen::Builder::default()
+    .header("src/c/myStack.h").generate().unwrap()
+    .write_to_file("src/myStack.rs").unwrap();
+cc::Build::new()
+    .file("src/c/myStack.c").try_compile("myStack").unwrap();
+csbindgen::Builder::default()
+    .input_bindgen_file("src/myStack.rs")
+    .rust_method_prefix("cffi_")
+    .rust_file_header("use super::myStack::*;")
+    .csharp_entry_point_prefix("cffi_")
+    .csharp_dll_name("csbindgenhandson")
+    .csharp_namespace("CsbindgenHandsOn.Native")
+    .csharp_class_name("CNativeMethodsMyStack")
+    .generate_to_file(
+        "src/myStack_ffi.rs",
+        "../CsbindgenHandsOn/Native/CNativeMethodsMyStack.g.cs",
+    ).unwrap();
+```
+
+---
+# GroupedNativeMethodsを使ってみよう④
+- `lib.rs`に下のコードを追記して、Rustコンパイラに生成したコードを認識させる
+```rust
+#[allow(non_snake_case)]
+mod myStack;
+
+#[allow(non_snake_case)]
+mod myStack_ffi;
+```
+
+---
+# GroupedNativeMethodsを使ってみよう⑤
+- `CsbindgenHandsOn/Native`ディレクトリに`CNativeMethodsMyStack.cs`ファイルを作成し下記コードを書き込む
+```cs
+using GroupedNativeMethodsGenerator;
+
+namespace CsbindgenHandsOn.Native
+{
+    [GroupedNativeMethods(removePrefix: "myStack")]
+    internal static unsafe partial class CNativeMethodsMyStack { }
+}
+```
+
+---
+# GroupedNativeMethodsを使ってみよう⑥-1
+- `CsbindgenHandsOn`ディレクトリに`TestGroupedNativeMethods.cs`ファイルを作成し下記コードを書き込む
+```cs
+using CsbindgenHandsOn.Native;
+
+namespace CsbindgenHandsOn
+{
+    public sealed unsafe class TestGroupedNativeMethods 
+                               : IDisposable
+    {
+        private bool _disposed;
+        private readonly MyStack* _stack;
+        public TestGroupedNativeMethods()
+        {
+            _stack = CNativeMethodsMyStack.myStack_create(5);
+        }
+```
+
+---
+# GroupedNativeMethodsを使ってみよう⑥-2
+```cs
+        public void PushAndPop(ReadOnlySpan<int> numbers)
+        {
+            for (int i = 0; i < numbers.Length && i < 5; i++)
+            {
+                _stack->Push(numbers[i]);
+                Console.WriteLine($"pushed {numbers[i]}");
+            }
+            for (int i = 0;i < numbers.Length && i != 5; i++)
+            {
+                Console.WriteLine($"popped {_stack->Pop()}");
+            }
+        }
+```
+
+---
+# GroupedNativeMethodsを使ってみよう⑥-3
+```cs
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _stack->Delete();
+            _disposed = true;
+        }
+    }
+}
+```
+
+---
+# GroupedNativeMethodsを使ってみよう⑦-1
+- 次に`ConsoleApp/Program.cs`のコードに以下のコードを追加して実行しましょう！
+```cs
+using var t = new TestGroupedNativeMethods();
+t.PushAndPop([1,2,3,4,5]);
+```
+- このコードの出力結果が以下のようになっているはずです。
+```
+pushed 1
+pushed 2
+pushed 3
+pushed 4
+pushed 5
+```
+
+---
+# GroupedNativeMethodsを使ってみよう⑦-2
+```
+popped 5
+popped 4
+popped 3
+popped 2
+popped 1
+```
+
+---
+# GroupedNativeMethods
+- `[GroupedNativeMethods]`をつけたクラスに対してソースコードソースコードを生成する
+  - `bindgen`側でこの機能を使用したいメソッドをまとめてRust用コードを生成するとよい
+    - もちろんヘッダファイルで分けてもよい
+- `[GroupedNativeMethods]`属性を`csbindgen`で生成されたC#FFI用クラスに付ける
+  - 生成されたコードに対して属性をつけるのではなく、上書きされないように、`partial`クラスで別ファイルにしてつける
 
 ---
 # お疲れさまでした！！
