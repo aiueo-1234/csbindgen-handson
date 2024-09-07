@@ -19,3 +19,9 @@ pub unsafe extern "C" fn rust_pow(x: c_int, y: c_int) -> c_int {
     }
     ret
 }
+
+#[allow(non_snake_case)]
+mod myStack;
+
+#[allow(non_snake_case)]
+mod myStack_ffi;
